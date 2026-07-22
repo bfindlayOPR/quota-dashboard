@@ -1,0 +1,47 @@
+name: Refresh quota dashboard
+
+on:
+  schedule:
+    # 06:00 UTC, Monday to Friday (about 7am UK in summer, 6am in winter).
+    - cron: "0 6 * * 1-5"
+  workflow_dispatch:        # lets you run it by hand from the Actions tab too
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# only one run at a time
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Build the dashboard
+        run: python quota_dashboard.py
+
+      - name: Upload for GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
