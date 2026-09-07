@@ -225,7 +225,7 @@ PAGE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>UK Steel Quota Dashboard</title>
 <style>
-:root{--ok:#1a7f37;--ok-bg:#e6f4ea;--warn:#b26a00;--warn-bg:#fff4e0;--crit:#c62828;--crit-bg:#fdecea;--ink:#1a1f26;--mut:#5b6572;--line:#e3e7ec;--card:#fff;--bg:#f4f6f8;}
+:root{--ok:#1a7f37;--ok-bg:#e6f4ea;--warn:#b26a00;--warn-bg:#fff4e0;--crit:#c62828;--crit-bg:#fdecea;--ink:#16294f;--mut:#5b6572;--line:#e3e7ec;--card:#fff;--bg:#f4f6f8;}
 *{box-sizing:border-box;}
 body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);}
 .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 60px;}
@@ -288,8 +288,28 @@ footer{margin-top:26px;color:var(--mut);font-size:12px;}
 .navlink:hover{opacity:.9;}
 .chg-neg{color:var(--crit);font-weight:700;}
 .chg-pos{color:var(--ok);font-weight:700;}
+.brandbar{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--ink);border-radius:12px;padding:13px 18px;margin-bottom:14px;}
+.brandbar img{height:32px;width:auto;}
+.brandsub{color:#fff;font-size:13px;font-weight:600;opacity:.9;}
+@media (max-width:680px){
+  .brandbar{padding:11px 14px;}.brandbar img{height:26px;}.brandsub{font-size:11px;}
+  .wrap{padding:16px 12px 50px;}
+  h1{font-size:19px;}
+  header{align-items:flex-start;}
+  .summary{gap:8px;}
+  .stat{min-width:calc(50% - 6px);padding:12px;}
+  .stat .n{font-size:22px;}
+  table{font-size:12px;}
+  th,td{padding:7px 8px;}
+  th:nth-child(3),td:nth-child(3){display:none;}
+  .barcell{width:86px;}
+  .chip{min-width:calc(50% - 8px);}
+  .navlink{display:block;margin:8px 0;text-align:center;}
+  .dgrid{gap:12px;}
+}
 </style></head>
 <body><div class="wrap">
+<div class="brandbar"><img src="https://oprgroup.co.uk/wp-content/uploads/2024/01/OPR-LOGO-WHITE.svg" alt="OPR Group"><span class="brandsub">Steel Quota Dashboard</span></div>
 <header>
   <div><h1>UK Steel Safeguard &mdash; Quota Dashboard</h1>
   <div class="sub">Live quota remaining per order number &middot; %%QLABEL%%</div></div>
@@ -440,14 +460,42 @@ def build_html(rows):
 
 
 def load_prev_history():
-    """Read the previously published snapshot log from the live page."""
+    """Read the snapshot log: committed seed (durable) merged with the live page."""
+    hist = {}
+    try:
+        with open("history_seed.json", encoding="utf-8") as f:
+            hist.update(json.load(f))
+    except Exception:
+        pass
     try:
         r = requests.get(HISTORY_URL + "?t=" + str(int(time.time())), timeout=30)
         if r.status_code == 200 and r.text.strip():
-            return r.json()
+            hist.update(r.json())
     except Exception as e:
         print("history load skipped:", e)
-    return {}
+    return hist
+
+
+def write_backups(history):
+    """Durable daily backup: commit history_seed.json (repo) + an Excel-openable
+    history.csv (repo root AND public/ so it's also downloadable from the site)."""
+    with open("history_seed.json", "w", encoding="utf-8") as f:
+        json.dump(history, f)
+    meta = {order: (cat, CATEGORY_NAMES.get(cat, cat), origin)
+            for order, cat, origin, base in QUOTAS}
+    def esc(s):
+        s = str(s)
+        return '"' + s.replace('"', '""') + '"' if ("," in s or '"' in s) else s
+    lines = ["Date,Order number,Category,Category name,Origin,Remaining (MT)"]
+    for d in sorted(history):
+        for o, bal in history[d].items():
+            c, name, og = meta.get(o, ("", "", ""))
+            lines.append(",".join([d, o, c, esc(name), esc(og), str(round(bal))]))
+    csv_text = "\n".join(lines) + "\n"
+    with open("history.csv", "w", encoding="utf-8") as f:
+        f.write(csv_text)
+    with open(os.path.join("public", "history.csv"), "w", encoding="utf-8") as f:
+        f.write(csv_text)
 
 
 def snapshot_ref(history, days_back):
@@ -463,8 +511,18 @@ def snapshot_ref(history, days_back):
 
 
 def attach_changes(rows, history):
-    """Attach daily and weekly change vs earlier snapshots to each row."""
-    ref_d = snapshot_ref(history, 1)
+    """Attach latest-movement and weekly change vs earlier snapshots to each row."""
+    current = {r["order"]: r["balance"] for r in rows if r["balance"] is not None}
+    todaystr = date.today().isoformat()
+    priors = sorted(d for d in history if d < todaystr)
+    ref_d = None
+    for d in reversed(priors):
+        snap = history[d]
+        if any((o in current) and abs(current[o] - float(snap[o])) > 0.001 for o in snap):
+            ref_d = d
+            break
+    if ref_d is None and priors:
+        ref_d = priors[-1]
     ref_w = snapshot_ref(history, 7)
     prev_d = history.get(ref_d) if ref_d else None
     prev_w = history.get(ref_w) if ref_w else None
@@ -497,7 +555,7 @@ MOVERS_PAGE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>UK Quota Movers</title>
 <style>
-:root{--ok:#1a7f37;--crit:#c62828;--ink:#1a1f26;--mut:#5b6572;--line:#e3e7ec;--card:#fff;--bg:#f4f6f8;}
+:root{--ok:#1a7f37;--crit:#c62828;--ink:#16294f;--mut:#5b6572;--line:#e3e7ec;--card:#fff;--bg:#f4f6f8;}
 *{box-sizing:border-box;}body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);}
 .wrap{max-width:1000px;margin:0 auto;padding:28px 20px 60px;}
 header{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:8px;border-bottom:2px solid var(--ink);padding-bottom:14px;}
@@ -518,15 +576,27 @@ td{padding:8px 12px;border-bottom:1px solid var(--line);}tr:last-child td{border
 .num{text-align:right;font-variant-numeric:tabular-nums;}
 .cat{color:var(--mut);font-size:11px;}.ctry{font-weight:600;}.mono{font-family:ui-monospace,Menlo,monospace;color:var(--mut);}
 .drop{color:var(--crit);font-weight:700;}.gain{color:var(--ok);font-weight:700;}
+.brandbar{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--ink);border-radius:12px;padding:13px 18px;margin-bottom:14px;}
+.brandbar img{height:32px;width:auto;}.brandsub{color:#fff;font-size:13px;font-weight:600;opacity:.9;}
 .none{color:var(--mut);}footer{margin-top:26px;color:var(--mut);font-size:12px;}
+@media (max-width:680px){
+  .wrap{padding:16px 12px 50px;}
+  .stat{min-width:calc(50% - 6px);}
+  table{font-size:12px;}
+  th,td{padding:7px 8px;}
+  th:nth-child(4),td:nth-child(4){display:none;}
+  .navlink{display:block;margin:8px 0;text-align:center;}
+  .toggle{display:flex;width:100%;}.toggle button{flex:1;}
+}
 </style></head>
 <body><div class="wrap">
+<div class="brandbar"><img src="https://oprgroup.co.uk/wp-content/uploads/2024/01/OPR-LOGO-WHITE.svg" alt="OPR Group"><span class="brandsub">Steel Quota Dashboard</span></div>
 <header><div><h1>UK Steel Quota &mdash; Movers</h1>
 <div class="sub">Which quotas are being drawn down</div></div>
 <div class="sub">Refreshed<br><strong>%%TS%%</strong></div></header>
 <a class="navlink" href="index.html">&larr; Dashboard</a>
 <a class="navlink" href="trends.html">Historical trends &rarr;</a>
-<div class="toggle"><button id="btn-d" class="on" onclick="showv('d')">Since yesterday</button><button id="btn-w" onclick="showv('w')">Last 7 days</button></div>
+<div class="toggle"><button id="btn-d" class="on" onclick="showv('d')">Latest changes</button><button id="btn-w" onclick="showv('w')">Last 7 days</button></div>
 <div id="view-d">%%DAILY%%</div>
 <div id="view-w" style="display:none">%%WEEKLY%%</div>
 <footer>Drops = quota consumed (imports cleared); gains = returns/adjustments. Weekly compares against the snapshot around 7 days ago.<br>
@@ -604,7 +674,7 @@ def build_trends():
 <title>UK Quota Trends</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-:root{--ok:#1a7f37;--crit:#c62828;--ink:#1a1f26;--mut:#5b6572;--line:#e3e7ec;--card:#fff;--bg:#f4f6f8;}
+:root{--ok:#1a7f37;--crit:#c62828;--ink:#16294f;--mut:#5b6572;--line:#e3e7ec;--card:#fff;--bg:#f4f6f8;}
 *{box-sizing:border-box;}body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);}
 .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 60px;}
 header{border-bottom:2px solid var(--ink);padding-bottom:14px;}
@@ -625,9 +695,21 @@ td{padding:8px 12px;border-bottom:1px solid var(--line);}tr:last-child td{border
 .num{text-align:right;font-variant-numeric:tabular-nums;}
 .up{color:var(--crit);font-weight:700;}.down{color:var(--ok);font-weight:700;}.mut{color:var(--mut);}
 .note{color:var(--mut);font-size:13px;margin:8px 0 0;}
+.brandbar{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--ink);border-radius:12px;padding:13px 18px;margin-bottom:14px;}
+.brandbar img{height:32px;width:auto;}.brandsub{color:#fff;font-size:13px;font-weight:600;opacity:.9;}
+@media (max-width:680px){
+  .wrap{padding:16px 12px 50px;}
+  .controls{flex-direction:column;align-items:stretch;}
+  select{width:100%;}
+  table{font-size:12px;}
+  th,td{padding:7px 8px;}
+  .navlink{display:block;margin:8px 0;text-align:center;}
+  .expbtn{width:100%;}
+}
 footer{margin-top:26px;color:var(--mut);font-size:12px;}
 </style></head>
 <body><div class="wrap">
+<div class="brandbar"><img src="https://oprgroup.co.uk/wp-content/uploads/2024/01/OPR-LOGO-WHITE.svg" alt="OPR Group"><span class="brandsub">Steel Quota Dashboard</span></div>
 <header><h1>UK Steel Quota &mdash; Historical Trends</h1>
 <div class="sub">Drawdown over time, built from the daily snapshot log</div></header>
 <a class="navlink" href="index.html">&larr; Dashboard</a>
@@ -777,6 +859,7 @@ def main():
     with open(TRENDS_FILE, "w", encoding="utf-8") as f:
         f.write(build_trends())
     save_history(rows, history)
+    write_backups(history)
     ok = sum(1 for r in rows if r["error"] is None)
     print("Done. {}/{} live. ref={}. Wrote index + movers + trends + history.".format(ok, len(rows), ref))
 
