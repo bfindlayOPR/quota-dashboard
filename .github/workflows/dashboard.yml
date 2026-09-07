@@ -2,15 +2,17 @@ name: Refresh quota dashboard
 
 on:
   schedule:
-    - cron: "7 5 * * 1-5"    # ~06:07 UK
-    - cron: "32 5 * * 1-5"   # backup ~06:32 UK if the first slips
-  workflow_dispatch: 
+    # 05:00 UTC, Monday to Friday = 6am UK during British Summer Time (now).
+    # (In winter/GMT this becomes 5am UK - earlier, so still ready before work.)
+    - cron: "0 5 * * 1-5"
+  workflow_dispatch:        # lets you run it by hand from the Actions tab too
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
+# only one run at a time
 concurrency:
   group: "pages"
   cancel-in-progress: false
@@ -22,14 +24,33 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install requests
-      - run: python quota_dashboard.py
-      - uses: actions/upload-pages-artifact@v3
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Build the dashboard
+        run: python quota_dashboard.py
+
+      - name: Commit daily backup (history_seed.json + history.csv)
+        run: |
+          git config user.name "quota-bot"
+          git config user.email "actions@github.com"
+          git add history_seed.json history.csv
+          git commit -m "history backup $(date -u +%F)" || echo "no changes to commit"
+          git push || echo "nothing to push"
+
+      - name: Upload for GitHub Pages
+        uses: actions/upload-pages-artifact@v3
         with:
           path: public
-      - id: deployment
+
+      - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
