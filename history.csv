@@ -2155,11 +2155,11 @@ Date,Order number,Category,Category name,Origin,Remaining (MT)
 2026-09-21,058646,21,Hollow Sections,EU,1125
 2026-09-21,058647,21,Hollow Sections,Turkey,6311
 2026-09-21,058648,21,Hollow Sections,Residual,2037
-2026-09-22,058600,1A,Non Alloy and Other Alloy Hot Rolled Sheets and Strips,EU,42905
+2026-09-22,058600,1A,Non Alloy and Other Alloy Hot Rolled Sheets and Strips,EU,42556
 2026-09-22,058601,1A,Non Alloy and Other Alloy Hot Rolled Sheets and Strips,India,671
 2026-09-22,058602,1A,Non Alloy and Other Alloy Hot Rolled Sheets and Strips,Korea (the Republic of),818
 2026-09-22,058603,1A,Non Alloy and Other Alloy Hot Rolled Sheets and Strips,Residual,297
-2026-09-22,058604,4,Metallic Coated Sheets,EU,32683
+2026-09-22,058604,4,Metallic Coated Sheets,EU,31816
 2026-09-22,058605,4,Metallic Coated Sheets,India,13553
 2026-09-22,058606,4,Metallic Coated Sheets,Korea (the Republic of),16562
 2026-09-22,058607,4,Metallic Coated Sheets,Vietnam,35798
@@ -2167,35 +2167,35 @@ Date,Order number,Category,Category name,Origin,Remaining (MT)
 2026-09-22,058609,5,Organic Coated Sheets,EU,0
 2026-09-22,058610,5,Organic Coated Sheets,Korea (the Republic of),803
 2026-09-22,058611,5,Organic Coated Sheets,Residual,0
-2026-09-22,058612,6,Tin Mill Products,EU,8293
+2026-09-22,058612,6,Tin Mill Products,EU,8289
 2026-09-22,058613,6,Tin Mill Products,Japan,78
 2026-09-22,058614,6,Tin Mill Products,Korea (the Republic of),239
 2026-09-22,058615,6,Tin Mill Products,Residual,3835
-2026-09-22,058616,7,Non-Alloy and Other Alloy Quarto Plates,EU,19068
+2026-09-22,058616,7,Non-Alloy and Other Alloy Quarto Plates,EU,17849
 2026-09-22,058617,7,Non-Alloy and Other Alloy Quarto Plates,Korea (the Republic of),8306
 2026-09-22,058618,7,Non-Alloy and Other Alloy Quarto Plates,United States of America (the),189
 2026-09-22,058619,7,Non-Alloy and Other Alloy Quarto Plates,Residual,0
-2026-09-22,058620,12A,Alloy Merchant Bars and Light Sections,EU,7658
-2026-09-22,058621,12A,Alloy Merchant Bars and Light Sections,Residual,4618
-2026-09-22,058622,12B,Non Alloy Merchant Bars and Light Sections,EU,20
-2026-09-22,058623,12B,Non Alloy Merchant Bars and Light Sections,Turkey,51
+2026-09-22,058620,12A,Alloy Merchant Bars and Light Sections,EU,7312
+2026-09-22,058621,12A,Alloy Merchant Bars and Light Sections,Residual,4611
+2026-09-22,058622,12B,Non Alloy Merchant Bars and Light Sections,EU,9
+2026-09-22,058623,12B,Non Alloy Merchant Bars and Light Sections,Turkey,23
 2026-09-22,058624,12B,Non Alloy Merchant Bars and Light Sections,Residual,0
-2026-09-22,058625,13,Rebars,EU,14052
+2026-09-22,058625,13,Rebars,EU,14003
 2026-09-22,058626,13,Rebars,Turkey,1809
 2026-09-22,058627,13,Rebars,Residual,2
-2026-09-22,058628,14,Stainless Bars and Light Sections,EU,885
-2026-09-22,058629,14,Stainless Bars and Light Sections,United States of America (the),341
+2026-09-22,058628,14,Stainless Bars and Light Sections,EU,809
+2026-09-22,058629,14,Stainless Bars and Light Sections,United States of America (the),335
 2026-09-22,058630,14,Stainless Bars and Light Sections,Residual,0
-2026-09-22,058634,16,Non-alloy and other alloy wire rod,EU,17559
+2026-09-22,058634,16,Non-alloy and other alloy wire rod,EU,17519
 2026-09-22,058635,16,Non-alloy and other alloy wire rod,Residual,0
-2026-09-22,058636,17,"Angles, shapes, and sections of iron or non-alloy steel",EU,16031
+2026-09-22,058636,17,"Angles, shapes, and sections of iron or non-alloy steel",EU,13606
 2026-09-22,058637,17,"Angles, shapes, and sections of iron or non-alloy steel",Korea (the Republic of),706
 2026-09-22,058638,17,"Angles, shapes, and sections of iron or non-alloy steel",United States of America (the),213
 2026-09-22,058639,17,"Angles, shapes, and sections of iron or non-alloy steel",Residual,121
-2026-09-22,058642,20,Gas Pipes,EU,2060
-2026-09-22,058643,20,Gas Pipes,India,347
+2026-09-22,058642,20,Gas Pipes,EU,2013
+2026-09-22,058643,20,Gas Pipes,India,322
 2026-09-22,058644,20,Gas Pipes,Turkey,525
-2026-09-22,058645,20,Gas Pipes,Residual,688
-2026-09-22,058646,21,Hollow Sections,EU,1125
+2026-09-22,058645,20,Gas Pipes,Residual,322
+2026-09-22,058646,21,Hollow Sections,EU,1105
 2026-09-22,058647,21,Hollow Sections,Turkey,6311
-2026-09-22,058648,21,Hollow Sections,Residual,2037
+2026-09-22,058648,21,Hollow Sections,Residual,1961
