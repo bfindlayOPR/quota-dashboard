@@ -749,10 +749,10 @@ def build_movers(rows, ref, ref_week):
 def build_trends():
     """Analytics page: reads the daily history log and charts drawdown over time.
 
-    Two levels of detail:
-      * 'All categories' - one line per category (as before)
-      * a single category - one line per quota line inside it, so you can see
-        exactly when each origin was exhausted rather than a category total.
+    Detail dropdown:
+      * 'All categories'  - one chart per category (or all on one, if preferred)
+      * a single category - one chart per quota line inside it, so each origin
+        can be read on its own with its own axis and exhaustion date
 
     Everything is computed client-side, so the page gets richer as the log grows.
     """
@@ -785,7 +785,13 @@ select{font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius
 .pickall{font-size:12px;color:var(--mut);margin-left:4px;}
 .pickall a{color:var(--ink);cursor:pointer;text-decoration:underline;margin:0 4px;}
 .expbtn{padding:9px 16px;border:1px solid var(--ink);border-radius:8px;background:var(--ink);color:#fff;font-size:13px;font-weight:600;cursor:pointer;}
-.chartbox{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:14px;margin-top:10px;}
+.mini{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px 6px;}
+.mini h3{margin:0 0 2px;font-size:14px;display:flex;align-items:center;gap:7px;}
+.mini .meta{font-size:11.5px;color:var(--mut);margin:0 0 8px;}
+.mini .gone{color:var(--crit);font-weight:700;}
+.wide{grid-column:1/-1;}
+.chartbox{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-top:10px;}
 h2{font-size:14px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);margin:26px 0 10px;}
 table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13px;}
 th{text-align:left;padding:9px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut);border-bottom:1px solid var(--line);cursor:pointer;}
@@ -794,13 +800,14 @@ td{padding:8px 12px;border-bottom:1px solid var(--line);}tr:last-child td{border
 .up{color:var(--crit);font-weight:700;}.down{color:var(--ok);font-weight:700;}.mut{color:var(--mut);}
 .exh{color:var(--crit);font-weight:700;}
 .note{color:var(--mut);font-size:13px;margin:8px 0 0;}
-.swatch{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px;vertical-align:middle;}
+.swatch{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle;flex:none;}
 .brandbar{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--ink);border-radius:12px;padding:13px 18px;margin-bottom:14px;}
 .brandbar img{height:32px;width:auto;}.brandsub{color:#fff;font-size:13px;font-weight:600;opacity:.9;}
 @media (max-width:680px){
   .wrap{padding:16px 12px 50px;}
   .controls{flex-direction:column;align-items:stretch;}
   select{width:100%;}
+  .grid{grid-template-columns:1fr;}
   table{font-size:12px;}
   th,td{padding:7px 8px;}
   .navlink{display:block;margin:8px 0;text-align:center;}
@@ -821,6 +828,8 @@ footer{margin-top:26px;color:var(--mut);font-size:12px;}
 <div class="controls">
   <div><label>Detail</label>
     <select id="catsel"></select></div>
+  <div id="linewrap" style="display:none"><label>Line</label>
+    <select id="linesel"></select></div>
   <div><label>Metric</label>
     <select id="metric">
       <option value="remain">Remaining balance (MT)</option>
@@ -841,7 +850,7 @@ footer{margin-top:26px;color:var(--mut);font-size:12px;}
 </div>
 <div id="cats" class="cats"></div>
 <div id="pickall" class="pickall"></div>
-<div class="chartbox" style="margin-top:10px;"><canvas id="chart" height="120"></canvas></div>
+<div id="charts"></div>
 <div id="exhbox"></div>
 <h2 id="tblhead">By category</h2>
 <p class="note">Consumption is the day-over-day fall in remaining balance (imports cleared). Rates build up as more days are logged.
@@ -862,7 +871,7 @@ Lines break at quarter boundaries, where quotas reset to a fresh allocation.</fo
 const META = %%META%%;
 const PALETTE = ['#c62828','#1a7f37','#1565c0','#b26a00','#6a1b9a','#00838f','#ad1457','#4e342e','#2e7d32','#283593','#795548','#0277bd'];
 let HIST=null, DATES=[], DAILY={}, DAILY_O={}, CATS=[], ORDERS_BY_CAT={},
-    selected=new Set(), mode='', chart=null, colourOf={};
+    selected=new Set(), mode='', charts=[], colourOf={};
 
 fetch('history.json?t='+Date.now()).then(r=>r.ok?r.json():{}).then(h=>{
   HIST=h||{}; DATES=Object.keys(HIST).sort();
@@ -896,6 +905,8 @@ function compute(){
 }
 function keyList(){ return mode==='' ? CATS : (ORDERS_BY_CAT[mode]||[]); }
 function keyLabel(k){ return mode==='' ? ('Cat '+k) : (META[k].origin||k); }
+function keySub(k){ return mode==='' ? (META[ORDERS_BY_CAT[k][0]].name||'')
+                                     : ('Order '+k+' \\u00b7 base '+(META[k].base||0).toLocaleString()+' MT'); }
 function dailyArr(k){ return mode==='' ? DAILY[k] : DAILY_O[k]; }
 function baseFor(k){
   if(mode!=='') return META[k].base||0;
@@ -926,30 +937,53 @@ function buildCatSelect(){
 }
 function buildPicker(){
   const keys=keyList();
+  colourOf={}; keys.forEach((k,i)=>colourOf[k]=PALETTE[i%PALETTE.length]);
+  const box=document.getElementById('cats');
+  const wrap=document.getElementById('linewrap');
+  const lsel=document.getElementById('linesel');
+
   if(mode===''){
+    /* all categories: chips, pick any combination */
+    wrap.style.display='none';
+    box.style.display='flex';
     const totals=keys.map(c=>[c,DAILY[c].reduce((a,b)=>a+b,0)]).sort((a,b)=>b[1]-a[1]);
     selected=new Set(totals.slice(0,6).filter(t=>t[1]>0).map(t=>t[0]));
     if(selected.size===0) selected=new Set(totals.slice(0,4).map(t=>t[0]));
+    box.innerHTML='';
+    for(const k of keys){
+      const b=document.createElement('span');
+      b.className='catbtn'+(selected.has(k)?' on':'')+(isDead(k)?' dead':'');
+      b.innerHTML='<span class="swatch" style="background:'+colourOf[k]+'"></span> '+keyLabel(k);
+      b.onclick=()=>{ selected.has(k)?selected.delete(k):selected.add(k);
+                      b.classList.toggle('on'); counter(); render(); };
+      box.appendChild(b);
+    }
   } else {
-    selected=new Set(keys);          // all lines in the category, on by default
-  }
-  colourOf={}; keys.forEach((k,i)=>colourOf[k]=PALETTE[i%PALETTE.length]);
-  const box=document.getElementById('cats'); box.innerHTML='';
-  for(const k of keys){
-    const b=document.createElement('span');
-    const dead = isDead(k);
-    b.className='catbtn'+(selected.has(k)?' on':'')+(dead?' dead':'');
-    b.innerHTML='<span class="swatch" style="background:'+colourOf[k]+'"></span>'+keyLabel(k);
-    b.title = mode==='' ? '' : ('Order '+k);
-    b.onclick=()=>{ selected.has(k)?selected.delete(k):selected.add(k);
-                    b.classList.toggle('on'); counter(); render(); };
-    box.appendChild(b);
+    /* one category: a dropdown to look at a single origin, or all together */
+    box.style.display='none'; box.innerHTML='';
+    wrap.style.display='';
+    lsel.innerHTML='<option value="__ALL__">All lines (compare)</option>'
+      + keys.map(k=>'<option value="'+k+'">'+keyLabel(k)
+          + (isDead(k)?' \u2014 exhausted':'') + '</option>').join('');
+    lsel.value='__ALL__';
+    selected=new Set(keys);
+    lsel.onchange=function(){
+      selected = (this.value==='__ALL__') ? new Set(keyList()) : new Set([this.value]);
+      counter(); render();
+    };
   }
   counter();
 }
 function counter(){
   const keys=keyList();
-  document.getElementById('pickall').innerHTML = keys.length>1
+  const el=document.getElementById('pickall');
+  if(mode!==''){
+    el.innerHTML = (selected.size===1)
+      ? 'Showing 1 line &mdash; use the Line dropdown to switch origin or compare them all.'
+      : 'Showing all '+keys.length+' lines in this category.';
+    return;
+  }
+  el.innerHTML = keys.length>1
     ? 'Showing '+selected.size+' of '+keys.length+' &middot; <a onclick="pick(1)">all</a>|<a onclick="pick(0)">none</a>'
     : '';
 }
@@ -976,9 +1010,6 @@ function slice(){ const v=document.getElementById('range').value;
   const n=parseInt(v)||0; if(!n||n>=DATES.length) return [0,DATES.length]; return [DATES.length-n,DATES.length]; }
 
 /* ---------- series ---------- */
-/* Split the window into quota periods. A reset (balance jumping up) starts a new
-   one, so each quarter is drawn as its own segment - no day is lost at the join
-   and an exhausted quarter never appears to recover. */
 function segmentsFor(k,a,b){
   const segs=[]; let start=a;
   for(let i=a+1;i<b;i++){ if(isReset(k,i)){ segs.push([start,i]); start=i; } }
@@ -992,14 +1023,9 @@ function valueAt(k,metric,i,segStart){
   const v=remainAt(k,DATES[i]);
   if(v==null) return null;
   if(metric==='pct'){ const bs=baseFor(k)||1; return +Math.max(0,v/bs*100).toFixed(1); }
-  /* no upper clamp on pct: unused tonnage carries into the next quarter, so an
-     opening balance of allocation + carry-over reads above 100% */
   return +v.toFixed(0);
 }
-
-/* Every point where this key first hit zero, one per quota period. A quarter
-   reset starts a new period, so a line exhausted in September still shows its
-   September date even once October data exists. */
+/* Every point where this key first hit zero, one per quota period. */
 function exhaustIndices(k){
   const out=[]; let zeroed=false;
   for(let i=0;i<DATES.length;i++){
@@ -1011,33 +1037,28 @@ function exhaustIndices(k){
   }
   return out;
 }
-/* is it sitting at zero right now? (for the struck-through chip) */
 function isDead(k){
   for(let i=DATES.length-1;i>=0;i--){ const v=remainAt(k,DATES[i]); if(v!=null) return v<=0; }
   return false;
 }
+function datasetsFor(k,metric,a,b,colour){
+  const out=[];
+  const marks=(metric==='remain'||metric==='pct')
+    ? exhaustIndices(k).filter(i=>i>=a&&i<b) : [];
+  segmentsFor(k,a,b).forEach((seg,si)=>{
+    const [s0,s1]=seg;
+    const data=new Array(b-a).fill(null);
+    for(let i=s0;i<s1;i++) data[i-a]=valueAt(k,metric,i,s0);
+    const segMarks=marks.filter(i=>i>=s0&&i<s1).map(i=>({at:i-a,label:fmtDate(DATES[i])}));
+    const markSet=new Set(segMarks.map(m=>m.at));
+    out.push({label:keyLabel(k),data,borderColor:colour,backgroundColor:colour,tension:.2,
+              pointRadius:data.map((_,i)=>markSet.has(i)?5:0),pointHoverRadius:4,
+              borderWidth:2,spanGaps:false,fill:false,_marks:segMarks,_first:si===0});
+  });
+  return out;
+}
 
-/* dashed line at 100% - one full quarterly allocation. Anything above it is
-   carry-over from the previous quarter sitting on top of the new grant. */
-const fullLine={
-  id:'fullLine',
-  beforeDatasetsDraw(c,args,opts){
-    if(opts.metric!=='pct') return;
-    const y=c.scales.y, x=c.scales.x;
-    if(100>y.max || 100<y.min) return;
-    const py=y.getPixelForValue(100), ctx=c.ctx;
-    ctx.save();
-    ctx.strokeStyle='#9aa4b0'; ctx.lineWidth=1; ctx.setLineDash([5,4]);
-    ctx.beginPath(); ctx.moveTo(x.left,py); ctx.lineTo(x.right,py); ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.font='600 10px -apple-system,Segoe UI,Roboto,sans-serif';
-    ctx.fillStyle='#5b6572'; ctx.textAlign='left';
-    ctx.fillText('100% = one quarter\u2019s allocation', x.left+6, py-4);
-    ctx.restore();
-  }
-};
-
-/* label the exhaustion point on the chart */
+/* ---------- chart plugins ---------- */
 const exhLabels={
   id:'exhLabels',
   afterDatasetsDraw(c){
@@ -1056,45 +1077,77 @@ const exhLabels={
     });
   }
 };
-
-function render(){
-  const metric=document.getElementById('metric').value; const [a,b]=slice();
-  const labels=DATES.slice(a,b);
-  const ds=[];
-  for(const k of selected){
-    const col=colourOf[k]||PALETTE[0];
-    const marks=(metric==='remain'||metric==='pct')
-      ? exhaustIndices(k).filter(i=>i>=a&&i<b) : [];
-    segmentsFor(k,a,b).forEach((seg,si)=>{
-      const [s0,s1]=seg;
-      const data=new Array(b-a).fill(null);
-      for(let i=s0;i<s1;i++) data[i-a]=valueAt(k,metric,i,s0);
-      const segMarks=marks.filter(i=>i>=s0&&i<s1)
-                          .map(i=>({at:i-a,label:fmtDate(DATES[i])}));
-      const markSet=new Set(segMarks.map(m=>m.at));
-      ds.push({label:keyLabel(k),data,borderColor:col,backgroundColor:col,tension:.2,
-               pointRadius:data.map((_,i)=>markSet.has(i)?5:0),pointHoverRadius:4,
-               borderWidth:2,spanGaps:false,_marks:segMarks,_first:si===0});
-    });
+const fullLine={
+  id:'fullLine',
+  beforeDatasetsDraw(c,args,opts){
+    if(opts.metric!=='pct') return;
+    const y=c.scales.y, x=c.scales.x;
+    if(100>y.max || 100<y.min) return;
+    const py=y.getPixelForValue(100), ctx=c.ctx;
+    ctx.save();
+    ctx.strokeStyle='#9aa4b0'; ctx.lineWidth=1; ctx.setLineDash([5,4]);
+    ctx.beginPath(); ctx.moveTo(x.left,py); ctx.lineTo(x.right,py); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font='600 10px -apple-system,Segoe UI,Roboto,sans-serif';
+    ctx.fillStyle='#5b6572'; ctx.textAlign='left';
+    ctx.fillText('100% = one quarter\\u2019s allocation', x.left+6, py-4);
+    ctx.restore();
   }
-  if(chart) chart.destroy();
-  chart=new Chart(document.getElementById('chart'),{type:'line',data:{labels,datasets:ds},
+};
+
+/* ---------- render ---------- */
+function newChart(canvas,labels,ds,metric,showLegend){
+  return new Chart(canvas,{type:'line',data:{labels,datasets:ds},
     plugins:[exhLabels,fullLine],
-    options:{responsive:true,interaction:{mode:'index',intersect:false},
-      plugins:{legend:{position:'bottom',labels:{filter:(it,d)=>d.datasets[it.datasetIndex]._first}},
+    options:{responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:showLegend,position:'bottom',
+                 labels:{filter:(it,d)=>d.datasets[it.datasetIndex]._first}},
         fullLine:{metric:metric},
         tooltip:{filter:(c)=>c.parsed.y!=null,
           callbacks:{label:(c)=>c.dataset.label+': '
             +(c.parsed.y==null?'-':c.parsed.y.toLocaleString()+(metric==='pct'?'%':''))}}},
-      scales:{y:{beginAtZero:true,
-        ticks:{callback:(v)=>metric==='pct'?v+'%':v.toLocaleString()}}}}});
+      scales:{x:{ticks:{maxTicksLimit:8,maxRotation:0,autoSkip:true}},
+              y:{beginAtZero:true,
+                 ticks:{maxTicksLimit:6,callback:(v)=>metric==='pct'?v+'%':v.toLocaleString()}}}}});
+}
+function render(){
+  const metric=document.getElementById('metric').value;
+  const [a,b]=slice();
+  const labels=DATES.slice(a,b);
+  charts.forEach(c=>c.destroy()); charts=[];
+  const host=document.getElementById('charts');
+  const keys=keyList().filter(k=>selected.has(k));
+
+  if(!keys.length){
+    host.innerHTML='<p class="note">Nothing selected.</p>';
+    buildExhBox(); buildTable(); return;
+  }
+
+  let head='';
+  if(mode!=='' && keys.length===1){
+    const k=keys[0];
+    const gone=exhaustIndices(k).filter(x=>x>=a&&x<b);
+    head='<h3 style="margin:0 0 2px;font-size:15px;display:flex;align-items:center;gap:7px;">'
+       + '<span class="swatch" style="background:'+(colourOf[k]||PALETTE[0])+'"></span>'
+       + keyLabel(k)+'</h3><p class="meta" style="font-size:12px;color:var(--mut);margin:0 0 10px;">'
+       + keySub(k)
+       + (gone.length ? ' &middot; <span class="gone" style="color:var(--crit);font-weight:700;">exhausted '
+           + fmtDate(DATES[gone[gone.length-1]])+'</span>' : '')
+       + '</p>';
+  }
+  host.innerHTML='<div class="chartbox">'+head
+    +'<div style="height:340px"><canvas id="c_all"></canvas></div></div>';
+  const ds=[];
+  for(const k of keys) ds.push(...datasetsFor(k,metric,a,b,colourOf[k]||PALETTE[0]));
+  charts.push(newChart(document.getElementById('c_all'),labels,ds,metric,keys.length>1));
   buildExhBox();
   buildTable();
 }
 function fmtDate(iso){ const d=new Date(iso+'T00:00:00');
   return d.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }
 
-/* summary of exhausted lines under the chart */
+/* summary of exhausted lines under the charts */
 function buildExhBox(){
   const box=document.getElementById('exhbox');
   if(mode===''){ box.innerHTML=''; return; }
@@ -1105,7 +1158,7 @@ function buildExhBox(){
   box.innerHTML='<h2>Exhausted</h2><table><thead><tr><th>Origin</th><th>Order</th>'
     +'<th class="num">Base (MT)</th><th>First recorded at zero</th></tr></thead><tbody>'
     + done.sort((x,y)=>x.when<y.when?-1:1).map(r=>
-        '<tr><td><span class="swatch" style="background:'+colourOf[r.k]+'"></span>'
+        '<tr><td><span class="swatch" style="background:'+colourOf[r.k]+'"></span> '
         + (META[r.k].origin||'') + '</td><td class="mut">'+r.k+'</td>'
         + '<td class="num">'+(META[r.k].base||0).toLocaleString()+'</td>'
         + '<td class="exh">'+r.when+'</td></tr>').join('')
